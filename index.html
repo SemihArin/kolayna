@@ -213,6 +213,7 @@
       color: var(--text); border: 1px solid var(--border); border-radius: 18px;
       background: rgba(255,182,193,.05); padding: 14px 16px;
       transition: border-color .15s ease, box-shadow .15s ease;
+      font-family: inherit; font-size: 15px;
     }
     textarea::placeholder { color: #c090a8; }
     textarea:focus { border-color: rgba(255,105,180,.55); box-shadow: 0 0 0 4px rgba(255,105,180,.12); }
@@ -352,8 +353,8 @@
           <div id="messages" class="messages">
             <div id="emptyState" class="empty-state">
               <div>
-                <h2>Mesajları görmek için giriş yap</h2>
-                <p>Google hesabınla giriş yaptıktan sonra sohbet burada akacak.</p>
+                <h2>Henüz mesaj yok</h2>
+                <p>İlk mesajı sen gönder!</p>
               </div>
             </div>
           </div>
@@ -396,20 +397,18 @@
     </div>
   </div>
 
+  <!-- FIX 1: Düzgün Firebase CDN URL'leri -->
   <script type="module">
-    import { initializeApp } from "[gstatic.com](https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js)";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
     import {
       getAuth,
       GoogleAuthProvider,
       onAuthStateChanged,
-      signInWithRedirect,
-      getRedirectResult,
+      signInWithPopup,
       signOut
-    } from "[gstatic.com](https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js)";
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
     import {
-      initializeFirestore,
-      persistentLocalCache,
-      persistentMultipleTabManager,
+      getFirestore,
       collection,
       addDoc,
       query,
@@ -418,7 +417,7 @@
       onSnapshot,
       serverTimestamp,
       Timestamp
-    } from "[gstatic.com](https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js)";
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
     import {
       getDatabase,
       ref,
@@ -427,12 +426,12 @@
       onValue,
       remove,
       goOnline
-    } from "[gstatic.com](https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js)";
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBu3fMWUupz6EIbRyB4FBOfplF7GFDToMc",
       authDomain: "pelustakip-3be95.firebaseapp.com",
-      databaseURL: "[pelustakip-3be95-default-rtdb.europe-west1.firebasedatabase.app](https://pelustakip-3be95-default-rtdb.europe-west1.firebasedatabase.app)",
+      databaseURL: "https://pelustakip-3be95-default-rtdb.europe-west1.firebasedatabase.app",
       projectId: "pelustakip-3be95",
       storageBucket: "pelustakip-3be95.firebasestorage.app",
       messagingSenderId: "1080638886274",
@@ -445,38 +444,36 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    
-    // Modern persistence yaklaşımı
-    const db = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-    });
-    
+
+    // FIX 2: persistentLocalCache yerine basit getFirestore — daha az hata, daha geniş tarayıcı desteği
+    const db = getFirestore(app);
+
     const rtdb = getDatabase(app);
     const provider = new GoogleAuthProvider();
 
-    const authScreen = document.getElementById("authScreen");
-    const appShell = document.getElementById("appShell");
-    const loginBtn = document.getElementById("loginBtn");
-    const logoutBtn = document.getElementById("logoutBtn");
-    const userChip = document.getElementById("userChip");
-    const userAvatar = document.getElementById("userAvatar");
-    const userName = document.getElementById("userName");
-    const meText = document.getElementById("meText");
-    const connDot = document.getElementById("connDot");
-    const connText = document.getElementById("connText");
-    const messagesEl = document.getElementById("messages");
-    const emptyState = document.getElementById("emptyState");
+    const authScreen   = document.getElementById("authScreen");
+    const appShell     = document.getElementById("appShell");
+    const loginBtn     = document.getElementById("loginBtn");
+    const logoutBtn    = document.getElementById("logoutBtn");
+    const userChip     = document.getElementById("userChip");
+    const userAvatar   = document.getElementById("userAvatar");
+    const userName     = document.getElementById("userName");
+    const meText       = document.getElementById("meText");
+    const connDot      = document.getElementById("connDot");
+    const connText     = document.getElementById("connText");
+    const messagesEl   = document.getElementById("messages");
+    const emptyState   = document.getElementById("emptyState");
     const messageInput = document.getElementById("messageInput");
-    const sendBtn = document.getElementById("sendBtn");
-    const usersList = document.getElementById("usersList");
-    const activeCount = document.getElementById("activeCount");
-    const liveText = document.getElementById("liveText");
+    const sendBtn      = document.getElementById("sendBtn");
+    const usersList    = document.getElementById("usersList");
+    const activeCount  = document.getElementById("activeCount");
+    const liveText     = document.getElementById("liveText");
 
-    let currentUser = null;
+    let currentUser         = null;
     let unsubscribeMessages = null;
     let unsubscribePresence = null;
-    let presenceRef = null;
-    let typingTimeout = null;
+    let presenceRef         = null;
+    let typingTimeout       = null;
 
     function escapeHtml(text) {
       const div = document.createElement("div");
@@ -522,26 +519,25 @@
     }
 
     function renderMessage(docSnap) {
-      const data = docSnap.data();
-      const isMe = data.uid === currentUser?.uid;
-      const wrap = document.createElement("div");
+      const data  = docSnap.data();
+      const isMe  = data.uid === currentUser?.uid;
+      const wrap  = document.createElement("div");
       wrap.className = `message ${isMe ? "me" : ""}`;
 
-      const avatar = data.photoURL || "[gravatar.com](https://www.gravatar.com/avatar/?d=mp&s=64)";
-      const name = escapeHtml(data.name || "Anonim");
-      const text = escapeHtml(data.text || "");
-      const time = formatTime(data.createdAt);
+      const avatar = escapeHtml(data.photoURL || "https://www.gravatar.com/avatar/?d=mp&s=64");
+      const name   = escapeHtml(data.name  || "Anonim");
+      const text   = escapeHtml(data.text  || "");
+      const time   = formatTime(data.createdAt);
 
       wrap.innerHTML = `
         <div class="meta">
-          <img class="avatar" src="${avatar}" alt="avatar" />
+          <img class="avatar" src="${avatar}" alt="avatar" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=64'" />
           <span class="name">${name}</span>
           <span>•</span>
           <span>${time}</span>
         </div>
         <div class="message-text">${text}</div>
       `;
-
       return wrap;
     }
 
@@ -554,8 +550,8 @@
       try {
         await addDoc(collection(db, MESSAGES_COLLECTION), {
           text,
-          uid: currentUser.uid,
-          name: currentUser.displayName || currentUser.email || "Anonim",
+          uid:      currentUser.uid,
+          name:     currentUser.displayName || currentUser.email || "Anonim",
           photoURL: currentUser.photoURL || "",
           createdAt: serverTimestamp()
         });
@@ -592,7 +588,7 @@
           setConnectionState(true);
         },
         (err) => {
-          console.error(err);
+          console.error("Firestore hatası:", err);
           setConnectionState(false);
           messagesEl.innerHTML = `
             <div class="empty-state">
@@ -610,10 +606,10 @@
       presenceRef = ref(rtdb, `${PRESENCE_PATH}/${user.uid}`);
 
       const presenceData = {
-        uid: user.uid,
-        name: user.displayName || user.email || "Anonim",
-        photoURL: user.photoURL || "",
-        state: "online",
+        uid:         user.uid,
+        name:        user.displayName || user.email || "Anonim",
+        photoURL:    user.photoURL || "",
+        state:       "online",
         lastChanged: Date.now()
       };
 
@@ -625,10 +621,10 @@
 
       try {
         await onDisconnect(presenceRef).set({
-          uid: user.uid,
-          name: user.displayName || user.email || "Anonim",
-          photoURL: user.photoURL || "",
-          state: "offline",
+          uid:         user.uid,
+          name:        user.displayName || user.email || "Anonim",
+          photoURL:    user.photoURL || "",
+          state:       "offline",
           lastChanged: Date.now()
         });
       } catch (err) {
@@ -649,36 +645,47 @@
 
         usersList.innerHTML = "";
         activeCount.textContent = String(users.length);
-        liveText.textContent = String(users.length);
+        liveText.textContent    = String(users.length);
 
         if (!users.length) {
           usersList.innerHTML = `<div class="small-muted">Şu anda aktif kullanıcı yok.</div>`;
           return;
         }
 
-        users.sort((a, b) => (a.name || "").localeCompare(b.name || "", "tr")).forEach((user) => {
-          const item = document.createElement("div");
-          item.className = "user-item";
-          item.innerHTML = `
-            <img class="avatar" src="${user.photoURL || '[gravatar.com](https://www.gravatar.com/avatar/?d=mp&s=64)'}" alt="avatar" />
-            <div class="info">
-              <strong>${escapeHtml(user.name || "Anonim")}</strong>
-              <span>${formatLastSeen(user.lastChanged || Date.now())}</span>
-            </div>
-            <span class="presence"></span>
-          `;
-          usersList.appendChild(item);
-        });
+        users
+          .sort((a, b) => (a.name || "").localeCompare(b.name || "", "tr"))
+          .forEach((user) => {
+            const item = document.createElement("div");
+            item.className = "user-item";
+            const photo = escapeHtml(user.photoURL || "https://www.gravatar.com/avatar/?d=mp&s=64");
+            item.innerHTML = `
+              <img class="avatar" src="${photo}" alt="avatar" onerror="this.src='https://www.gravatar.com/avatar/?d=mp&s=64'" />
+              <div class="info">
+                <strong>${escapeHtml(user.name || "Anonim")}</strong>
+                <span>${formatLastSeen(user.lastChanged || Date.now())}</span>
+              </div>
+              <span class="presence"></span>
+            `;
+            usersList.appendChild(item);
+          });
       });
     }
 
+    // FIX 3: signInWithRedirect yerine signInWithPopup — daha güvenilir, redirect sorunlarını ortadan kaldırır
     async function login() {
+      loginBtn.disabled = true;
       try {
-        console.log("Google giriş başlatıldı");
-        await signInWithRedirect(auth, provider);
+        await signInWithPopup(auth, provider);
       } catch (err) {
-        console.error("Giriş başlatılamadı:", err);
-        alert("Giriş başarısız: " + (err?.message || err));
+        console.error("Giriş hatası:", err);
+        // Popup engellenirse kullanıcıya net hata göster
+        if (err.code === "auth/popup-blocked") {
+          alert("Tarayıcınız pop-up'ı engelledi. Lütfen pop-up iznine izin verin ve tekrar deneyin.");
+        } else if (err.code !== "auth/popup-closed-by-user") {
+          alert("Giriş başarısız: " + (err?.message || err));
+        }
+      } finally {
+        loginBtn.disabled = false;
       }
     }
 
@@ -701,28 +708,29 @@
       appShell.classList.toggle("hidden", !authed);
 
       if (authed) {
-        userChip.style.display = "inline-flex";
-        userAvatar.src = user.photoURL || "[gravatar.com](https://www.gravatar.com/avatar/?d=mp&s=64)";
-        userName.textContent = user.displayName || user.email || "Kullanıcı";
-        meText.textContent = user.displayName || user.email || "Kullanıcı";
-        messageInput.disabled = false;
-        sendBtn.disabled = false;
+        userChip.style.display   = "inline-flex";
+        userAvatar.src           = user.photoURL || "https://www.gravatar.com/avatar/?d=mp&s=64";
+        userName.textContent     = user.displayName || user.email || "Kullanıcı";
+        meText.textContent       = user.displayName || user.email || "Kullanıcı";
+        messageInput.disabled    = false;
+        sendBtn.disabled         = false;
         listenMessages();
         setPresence(user);
         startPresenceListener();
         messageInput.focus();
       } else {
         userChip.style.display = "none";
-        meText.textContent = "-";
-        messageInput.disabled = true;
-        sendBtn.disabled = true;
-        if (unsubscribeMessages) unsubscribeMessages();
-        if (unsubscribePresence) unsubscribePresence();
-        unsubscribeMessages = null;
-        unsubscribePresence = null;
-        usersList.innerHTML = "";
+        meText.textContent     = "-";
+        messageInput.disabled  = true;
+        sendBtn.disabled       = true;
+
+        if (unsubscribeMessages) { unsubscribeMessages(); unsubscribeMessages = null; }
+        if (unsubscribePresence)  { unsubscribePresence();  unsubscribePresence  = null; }
+
+        usersList.innerHTML     = "";
         activeCount.textContent = "0";
-        liveText.textContent = "0";
+        liveText.textContent    = "0";
+        setConnectionState(false);
       }
     }
 
@@ -742,9 +750,9 @@
       clearTimeout(typingTimeout);
       const typingRef = ref(rtdb, `typing/${currentUser.uid}`);
       set(typingRef, {
-        uid: currentUser.uid,
-        name: currentUser.displayName || currentUser.email || "Anonim",
-        state: true,
+        uid:       currentUser.uid,
+        name:      currentUser.displayName || currentUser.email || "Anonim",
+        state:     true,
         updatedAt: Date.now()
       }).catch(() => {});
 
@@ -756,17 +764,7 @@
     setConnectionState(false);
     goOnline(rtdb);
 
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) {
-          console.log("Redirect girişi tamamlandı");
-        }
-      })
-      .catch((err) => {
-        console.error("Redirect sonucu alınamadı:", err);
-        alert("Giriş sonucu alınamadı: " + (err?.message || err));
-      });
-
+    // FIX 4: getRedirectResult çağrısı kaldırıldı — artık popup kullandığımız için gerekli değil
     onAuthStateChanged(auth, (user) => setAuthedUI(user));
   </script>
 </body>
