@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Firebase Chat</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #111831;
+      --panel-2: #17213f;
+      --text: #e9eefc;
+      --muted: #95a2c7;
+      --accent: #6ea8fe;
+      --accent-2: #8b5cf6;
+      --danger: #ff6b6b;
+      --border: rgba(255,255,255,.08);
+      --shadow: 0 18px 60px rgba(0,0,0,.35);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(110,168,254,.16), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(139,92,246,.15), transparent 28%),
+        var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      min-height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .shell {
+      width: min(1100px, 100%);
+      height: min(92vh, 920px);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      background: rgba(17, 24, 49, .92);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(14px);
+    }
+
+    header {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,.03), transparent);
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 42px; height: 42px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 8px 24px rgba(110,168,254,.25);
+    }
+    .title-wrap h1 { margin: 0; font-size: 18px; }
+    .title-wrap p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+    .user-area { display: flex; align-items: center; gap: 10px; }
+    .user-chip {
+      display: none;
+      align-items: center; gap: 10px;
+      padding: 8px 12px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      object-fit: cover;
+      background: rgba(255,255,255,.08);
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-weight: 600;
+      cursor: pointer;
+      color: white;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      transition: transform .15s ease, filter .15s ease, opacity .15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn.secondary {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn.danger { background: linear-gradient(135deg, #ff7b7b, #f05252); }
+
+    .content {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      min-height: 0;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--border);
+      padding: 20px;
+      min-width: 0;
+      background: rgba(255,255,255,.015);
+    }
+
+    .card {
+      background: rgba(255,255,255,.02);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .card h2, .card h3 { margin: 0 0 10px; }
+    .muted { color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+    .status-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%; background: #6b7280;
+      display: inline-block;
+      box-shadow: 0 0 0 6px rgba(107,114,128,.12);
+    }
+    .dot.online { background: #22c55e; box-shadow: 0 0 0 6px rgba(34,197,94,.12); }
+
+    .chat {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .messages {
+      padding: 18px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .empty-state {
+      height: 100%;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--muted);
+      padding: 24px;
+    }
+
+    .message {
+      max-width: min(680px, 92%);
+      padding: 12px 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid var(--border);
+      align-self: flex-start;
+      word-break: break-word;
+    }
+
+    .message.me {
+      align-self: flex-end;
+      background: linear-gradient(135deg, rgba(110,168,254,.22), rgba(139,92,246,.18));
+      border-color: rgba(110,168,254,.22);
+    }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .meta strong { color: var(--text); font-size: 13px; }
+    .text { white-space: pre-wrap; line-height: 1.5; }
+
+    .composer {
+      padding: 16px;
+      border-top: 1px solid var(--border);
+      background: rgba(255,255,255,.02);
+    }
+
+    .composer-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    textarea {
+      width: 100%;
+      resize: none;
+      min-height: 54px;
+      max-height: 160px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      color: var(--text);
+      padding: 14px 16px;
+      outline: none;
+      font: inherit;
+    }
+    textarea::placeholder { color: #7f8bad; }
+    textarea:focus { border-color: rgba(110,168,254,.5); box-shadow: 0 0 0 4px rgba(110,168,254,.12); }
+
+    .auth-screen {
+      height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .auth-box {
+      width: min(520px, 100%);
+      background: rgba(17, 24, 49, .92);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+
+    .auth-box h2 { margin: 14px 0 10px; }
+    .auth-box p { margin: 0 0 20px; color: var(--muted); line-height: 1.6; }
+
+    .notice {
+      font-size: 13px;
+      color: #c9d2ea;
+      background: rgba(110,168,254,.08);
+      border: 1px solid rgba(110,168,254,.16);
+      padding: 12px 14px;
+      border-radius: 14px;
+      margin-top: 14px;
+      text-align: left;
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 900px) {
+      .content { grid-template-columns: 1fr; }
+      .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+      .shell { height: 100vh; border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="shell" id="appShell" style="display:none;">
+      <header>
+        <div class="brand">
+          <div class="logo"></div>
+          <div class="title-wrap">
+            <h1>Firebase Chat</h1>
+            <p>Google ile giriş, Firestore ile gerçek zamanlı sohbet</p>
+          </div>
+        </div>
+
+        <div class="user-area">
+          <div class="user-chip" id="userChip">
+            <img id="userAvatar" class="avatar" alt="avatar" />
+            <span id="userName"></span>
+          </div>
+          <button class="btn secondary" id="logoutBtn">Çıkış</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <aside class="sidebar">
+          <div class="card">
+            <h2>Oda Bilgisi</h2>
+            <div class="muted">Aşağıdaki koleksiyon adlarını kendi yapına göre değiştirebilirsin. Bu dosya sadece arayüz ve temel mantığı içerir.</div>
+            <div class="status-row">
+              <span><span class="dot" id="connDot"></span> Bağlantı</span>
+              <strong id="connText">Hazırlanıyor</strong>
+            </div>
+            <div class="status-row">
+              <span>Kullanıcı</span>
+              <strong id="meText">-</strong>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Kurulum</h3>
+            <div class="muted">
+              firebaseConfig alanını doldur. Firebase Console’da Google oturum açmayı aç. Firestore’u etkinleştir.
+            </div>
+          </div>
+        </aside>
+
+        <main class="chat">
+          <div class="messages" id="messages">
+            <div class="empty-state" id="emptyState">
+              <div>
+                <h2>Sohbet başlatmak için giriş yap</h2>
+                <p>Google hesabınla giriş yaptıktan sonra mesajlar burada görünecek.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="composer">
+            <div class="composer-row">
+              <textarea id="messageInput" placeholder="Mesaj yaz..." maxlength="1000" disabled></textarea>
+              <button class="btn" id="sendBtn" disabled>Gönder</button>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <div class="auth-screen" id="authScreen">
+      <div class="auth-box">
+        <div class="logo" style="margin:0 auto 10px;"></div>
+        <h2>Firebase Chat</h2>
+        <p>Google hesabınla giriş yap ve Firestore üzerinden gerçek zamanlı sohbet et.</p>
+        <button class="btn" id="loginBtn">Google ile Giriş</button>
+        <div class="notice">
+          <strong>Not:</strong> Aşağıdaki Firebase ayarlarını kendi bilgilerininle doldurman gerekiyor:
+          firebaseConfig, Firestore kuralları ve Google provider.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+    import {
+      getAuth,
+      GoogleAuthProvider,
+      signInWithPopup,
+      signOut,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      query,
+      orderBy,
+      limit,
+      serverTimestamp,
+      onSnapshot,
+      enableIndexedDbPersistence,
+      Timestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+    // 1) Burayı kendi Firebase bilgilerinizle doldurun.
+    const firebaseConfig = {
+      apiKey: "AIzaSyBu3fMWUupz6EIbRyB4FBOfplF7GFDToMc",
+  authDomain: "pelustakip-3be95.firebaseapp.com",
+  databaseURL: "https://pelustakip-3be95-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "pelustakip-3be95",
+  storageBucket: "pelustakip-3be95.firebasestorage.app",
+  messagingSenderId: "1080638886274",
+  appId: "1:1080638886274:web:ccc5ca53699e4d0fa53f9b",
+  measurementId: "G-ST10V0THX0"
+    };
+
+    // 2) İstersen koleksiyon adlarını değiştir.
+    const MESSAGES_COLLECTION = "messages";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const provider = new GoogleAuthProvider();
+
+    const authScreen = document.getElementById("authScreen");
+    const appShell = document.getElementById("appShell");
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const userChip = document.getElementById("userChip");
+    const userAvatar = document.getElementById("userAvatar");
+    const userName = document.getElementById("userName");
+    const meText = document.getElementById("meText");
+    const connDot = document.getElementById("connDot");
+    const connText = document.getElementById("connText");
+    const messagesEl = document.getElementById("messages");
+    const emptyState = document.getElementById("emptyState");
+    const messageInput = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+
+    let currentUser = null;
+    let unsubscribeMessages = null;
+
+    // Offline cache destekli basit persistence.
+    enableIndexedDbPersistence(db).catch(() => {
+      // Bazı tarayıcılarda/çoklu sekmede başarısız olabilir; uygulama yine de çalışır.
+    });
+
+    function formatTime(value) {
+      if (!value) return "az önce";
+      const date = value instanceof Timestamp ? value.toDate() : new Date(value);
+      return new Intl.DateTimeFormat("tr-TR", {
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(date);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function scrollToBottom() {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function setConnectedState(online) {
+      connDot.classList.toggle("online", online);
+      connText.textContent = online ? "Bağlı" : "Bekleniyor";
+    }
+
+    async function loginWithGoogle() {
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (err) {
+        alert("Giriş başarısız: " + (err?.message || err));
+      }
+    }
+
+    async function logout() {
+      try {
+        await signOut(auth);
+      } catch (err) {
+        alert("Çıkış başarısız: " + (err?.message || err));
+      }
+    }
+
+    async function sendMessage() {
+      if (!currentUser) return;
+      const text = messageInput.value.trim();
+      if (!text) return;
+
+      sendBtn.disabled = true;
+      try {
+        await addDoc(collection(db, MESSAGES_COLLECTION), {
+          text,
+          uid: currentUser.uid,
+          name: currentUser.displayName || "Anonim",
+          photoURL: currentUser.photoURL || "",
+          createdAt: serverTimestamp()
+        });
+        messageInput.value = "";
+      } catch (err) {
+        alert("Mesaj gönderilemedi: " + (err?.message || err));
+      } finally {
+        sendBtn.disabled = false;
+        messageInput.focus();
+      }
+    }
+
+    function renderMessage(doc) {
+      const data = doc.data();
+      const isMe = data.uid === currentUser?.uid;
+      const wrap = document.createElement("div");
+      wrap.className = `message ${isMe ? "me" : ""}`;
+
+      const name = escapeHtml(data.name || "Anonim");
+      const text = escapeHtml(data.text || "");
+      const time = formatTime(data.createdAt);
+      const avatar = data.photoURL || "https://www.gravatar.com/avatar/?d=mp&s=64";
+
+      wrap.innerHTML = `
+        <div class="meta">
+          <img class="avatar" src="${avatar}" alt="avatar" />
+          <strong>${name}</strong>
+          <span>•</span>
+          <span>${time}</span>
+        </div>
+        <div class="text">${text}</div>
+      `;
+
+      return wrap;
+    }
+
+    function listenMessages() {
+      if (unsubscribeMessages) unsubscribeMessages();
+      messagesEl.innerHTML = "";
+
+      const q = query(
+        collection(db, MESSAGES_COLLECTION),
+        orderBy("createdAt", "asc"),
+        limit(100)
+      );
+
+      unsubscribeMessages = onSnapshot(
+        q,
+        (snapshot) => {
+          messagesEl.innerHTML = "";
+
+          if (snapshot.empty) {
+            messagesEl.appendChild(emptyState);
+            return;
+          }
+
+          snapshot.forEach((doc) => {
+            messagesEl.appendChild(renderMessage(doc));
+          });
+          scrollToBottom();
+          setConnectedState(true);
+        },
+        (err) => {
+          console.error(err);
+          setConnectedState(false);
+          messagesEl.innerHTML = `
+            <div class="empty-state">
+              <div>
+                <h2>Mesajlar yüklenemedi</h2>
+                <p>${escapeHtml(err?.message || "Bilinmeyen hata")}</p>
+              </div>
+            </div>
+          `;
+        }
+      );
+    }
+
+    function setAuthedUI(user) {
+      currentUser = user;
+      const isAuthed = !!user;
+
+      authScreen.classList.toggle("hidden", isAuthed);
+      appShell.style.display = isAuthed ? "grid" : "none";
+
+      if (isAuthed) {
+        userChip.style.display = "flex";
+        userName.textContent = user.displayName || user.email || "Kullanıcı";
+        meText.textContent = user.displayName || user.email || "Kullanıcı";
+        userAvatar.src = user.photoURL || "https://www.gravatar.com/avatar/?d=mp&s=64";
+        messageInput.disabled = false;
+        sendBtn.disabled = false;
+        listenMessages();
+        messageInput.focus();
+      } else {
+        userChip.style.display = "none";
+        meText.textContent = "-";
+        messageInput.disabled = true;
+        sendBtn.disabled = true;
+        if (unsubscribeMessages) unsubscribeMessages();
+        unsubscribeMessages = null;
+      }
+    }
+
+    loginBtn.addEventListener("click", loginWithGoogle);
+    logoutBtn.addEventListener("click", logout);
+    sendBtn.addEventListener("click", sendMessage);
+
+    messageInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      setAuthedUI(user);
+    });
+
+    setConnectedState(false);
+  </script>
+</body>
+</html>
